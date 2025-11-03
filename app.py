@@ -77,7 +77,15 @@ def get_hexagons_with_filters(logistics_player='All', hour_bin='All', limit=None
     if limit is None:
         limit = Config.DEFAULT_HEXAGON_LIMIT
 
-    cache_key = f"hexagons:{logistics_player}:{hour_bin}:{limit}"
+    if isinstance(logistics_player, str) and logistics_player != 'All':
+        logistics_player = [logistics_player]
+    if isinstance(hour_bin, str) and hour_bin != 'All':
+        hour_bin = [hour_bin]
+
+    lp_key = ",".join(logistics_player) if isinstance(logistics_player, list) else "All"
+    hb_key = ",".join(hour_bin) if isinstance(hour_bin, list) else "All"
+    cache_key = f"hexagons:{lp_key}:{hb_key}:{limit}"
+
     cached = get_cache(cache_key)
     if cached:
         logger.info(f"✅ Cache hit for key: {cache_key}")
@@ -90,14 +98,14 @@ def get_hexagons_with_filters(logistics_player='All', hour_bin='All', limit=None
     
     # Stage 1: Filter by player and hour
     match_conditions = {}
-    if logistics_player != 'All':
-        match_conditions['logistics_player'] = logistics_player
-    if hour_bin != 'All':
-        match_conditions['hour_bin'] = hour_bin
+    if isinstance(logistics_player, list) and 'All' not in logistics_player:
+        match_conditions['logistics_player'] = {'$in': logistics_player}
+    if isinstance(hour_bin, list) and 'All' not in hour_bin:
+        match_conditions['hour_bin'] = {'$in': hour_bin}
     
     if match_conditions:
         pipeline.append({'$match': match_conditions})
-        logger.info(f"Applying match: {match_conditions}")
+        logger.info(f"Applying match conditions: {match_conditions}")
     
     # Stage 2: Group by H3 index with filtered metrics
     pipeline.extend([
@@ -194,7 +202,15 @@ def get_supply_points_with_filters(logistics_player='All', hour_bin='All', limit
     if limit is None:
         limit = Config.DEFAULT_SUPPLY_POINT_LIMIT
 
-    cache_key = f"supply_points:{logistics_player}:{hour_bin}:{limit}"
+    if isinstance(logistics_player, str) and logistics_player != 'All':
+        logistics_player = [logistics_player]
+    if isinstance(hour_bin, str) and hour_bin != 'All':
+        hour_bin = [hour_bin]
+
+    lp_key = ",".join(logistics_player) if isinstance(logistics_player, list) else "All"
+    hb_key = ",".join(hour_bin) if isinstance(hour_bin, list) else "All"
+    cache_key = f"supply_points:{lp_key}:{hb_key}:{limit}"
+
     cached = get_cache(cache_key)
     if cached:
         logger.info(f"✅ Cache hit for key: {cache_key}")
@@ -206,13 +222,14 @@ def get_supply_points_with_filters(logistics_player='All', hour_bin='All', limit
     pipeline = []
     
     match_conditions = {}
-    if logistics_player != 'All':
-        match_conditions['logistics_player'] = logistics_player
-    if hour_bin != 'All':
-        match_conditions['hour_bin'] = hour_bin
+    if isinstance(logistics_player, list) and 'All' not in logistics_player:
+        match_conditions['logistics_player'] = {'$in': logistics_player}
+    if isinstance(hour_bin, list) and 'All' not in hour_bin:
+        match_conditions['hour_bin'] = {'$in': hour_bin}
     
     if match_conditions:
         pipeline.append({'$match': match_conditions})
+        logger.info(f"Applying match conditions: {match_conditions}")
     
     pipeline.extend([
         {
@@ -275,6 +292,11 @@ def filter_hexagons():
         data = request.get_json()
         logistics_player = data.get('logistics_player', 'All')
         hour_bin = data.get('hour_bin', 'All')
+
+        if isinstance(logistics_player, str):
+            logistics_player = [logistics_player]
+        if isinstance(hour_bin, str):
+            hour_bin = [hour_bin]
         
         # Get hexagons with FILTERED metrics
         hexagons = get_hexagons_with_filters(logistics_player, hour_bin)
@@ -291,6 +313,7 @@ def filter_hexagons():
             'stats': stats
         })
     except Exception as e:
+        logger.exception("Error in /filter_hexagons")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/health')

@@ -23,8 +23,16 @@ def get_db_collection():
 
 def get_statistics(logistics_player='All', hour_bin='All'):
     """Get statistics with filters"""
-    cache_key = f"stats:{logistics_player}:{hour_bin}"
-    
+
+    if isinstance(logistics_player, str) and logistics_player != 'All':
+        logistics_player = [logistics_player]
+    if isinstance(hour_bin, str) and hour_bin != 'All':
+        hour_bin = [hour_bin]
+
+    lp_key = ",".join(logistics_player) if isinstance(logistics_player, list) else "All"
+    hb_key = ",".join(hour_bin) if isinstance(hour_bin, list) else "All"
+    cache_key = f"stats:{lp_key}:{hb_key}"
+
     # 1️⃣ Try fetching from cache first
     cached = get_cache(cache_key)
     if cached:
@@ -39,10 +47,10 @@ def get_statistics(logistics_player='All', hour_bin='All'):
     pipeline = []
     
     match_conditions = {}
-    if logistics_player != 'All':
-        match_conditions['logistics_player'] = logistics_player
-    if hour_bin != 'All':
-        match_conditions['hour_bin'] = hour_bin
+    if isinstance(logistics_player, list) and 'All' not in logistics_player:
+        match_conditions['logistics_player'] = {'$in': logistics_player}
+    if isinstance(hour_bin, list) and 'All' not in hour_bin:
+        match_conditions['hour_bin'] = {'$in': hour_bin}
     
     if match_conditions:
         pipeline.append({'$match': match_conditions})
@@ -103,13 +111,36 @@ def get_statistics(logistics_player='All', hour_bin='All'):
 
 def get_filters():
     """Get unique filter values"""
+    cache_key = "filters:logistics_player_hour_bin"
+    cached = get_cache(cache_key)
+    if cached:
+        logger.info(f"✅ Cache hit for filters")
+        return cached
+    else:
+        logger.info("❌ Cache miss for filters — fetching from MongoDB")
+
     collection = get_db_collection()
     
-    logistics_players = collection.distinct('logistics_player', {
-        'logistics_player': {'$nin': [None, '', 'unknown']}
+    logistics_players = collection.distinct(
+        'logistics_player',
+        {'logistics_player': {'$nin': [None, '', 'unknown']}}
+    )
+
+    logistics_players = sorted({
+        str(p).strip() for p in logistics_players if isinstance(p, str) and p.strip()
     })
-    logistics_players = sorted([str(p) for p in logistics_players if p])
-    
-    hour_bins = sorted(collection.distinct('hour_bin'))
-    
-    return logistics_players, hour_bins
+
+    hour_bins = collection.distinct('hour_bin')
+    hour_bins = sorted({
+        str(h).strip() for h in hour_bins if isinstance(h, str) and h.strip()
+    })
+
+    filters = {
+        "logistics_players": logistics_players,
+        "hour_bins": hour_bins
+    }
+
+    set_cache(cache_key, filters, Config.CACHE_EXPIRY_SECONDS * 10)
+    logger.info("✅ Cached filters successfully")
+
+    return filters["logistics_players"], filters["hour_bins"]

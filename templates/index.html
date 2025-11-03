@@ -55,6 +55,30 @@
         .filter-select:hover {
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
+
+        .selected-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .tag {
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tag span {
+            cursor: pointer;
+            font-weight: bold;
+            color: #666;
+        }
+
         
         .gps-input {
             padding: 8px 12px;
@@ -152,22 +176,24 @@
     <div class="top-filter-bar">
         <div class="filter-group">
             <label class="filter-label">Filter by Logistics Player:</label>
-            <select id="logistics-player-filter" class="filter-select">
+            <select id="logistics-player-filter" class="filter-select" multiple>
                 <option value="All">All</option>
                 {% for player in logistics_players %}
                 <option value="{{ player }}">{{ player.split('/')[-1] }}</option>
                 {% endfor %}
             </select>
+            <div id="selected-players" class="selected-tags"></div>
         </div>
         
         <div class="filter-group">
             <label class="filter-label">Filter by Hour Bin:</label>
-            <select id="hour-bin-filter" class="filter-select">
+            <select id="hour-bin-filter" class="filter-select" multiple>
                 <option value="All">All</option>
                 {% for bin in hour_bins %}
                 <option value="{{ bin }}">{{ bin }}</option>
                 {% endfor %}
             </select>
+            <div id="selected-hours" class="selected-tags"></div>
         </div>
         
         <div class="filter-group">
@@ -268,12 +294,48 @@
         // Filter functionality
         document.getElementById('apply-filter').addEventListener('click', applyFilter);
         
+        // --- Tag selection logic ---
+        function setupMultiSelect(selectId, containerId) {
+            const select = document.getElementById(selectId);
+            const container = document.getElementById(containerId);
+            
+            select.addEventListener('change', () => {
+                container.innerHTML = ''; // clear
+                Array.from(select.selectedOptions).forEach(opt => {
+                const tag = document.createElement('div');
+                tag.className = 'tag';
+                tag.innerHTML = `${opt.text}<span data-value="${opt.value}">&times;</span>`;
+                container.appendChild(tag);
+                });
+            });
+
+            container.addEventListener('click', e => {
+                if (e.target.tagName === 'SPAN') {
+                const value = e.target.getAttribute('data-value');
+                Array.from(select.options).forEach(opt => {
+                    if (opt.value === value) opt.selected = false;
+                });
+                e.target.parentElement.remove();
+                }
+            });
+        }
+
+        setupMultiSelect('logistics-player-filter', 'selected-players');
+        setupMultiSelect('hour-bin-filter', 'selected-hours');
+
+
         function applyFilter() {
             var btn = document.getElementById('apply-filter');
             var statusDiv = document.getElementById('status-message');
             
-            var logisticsPlayer = document.getElementById('logistics-player-filter').value;
-            var hourBin = document.getElementById('hour-bin-filter').value;
+            var logisticsPlayer = Array.from(
+                document.getElementById('logistics-player-filter').selectedOptions
+            ).map(o => o.value);
+
+            var hourBin = Array.from(
+                document.getElementById('hour-bin-filter').selectedOptions
+            ).map(o => o.value);
+
             var gpsInput = document.getElementById('gps-input').value.trim();
             
             // Handle GPS input
